@@ -1,5 +1,7 @@
 ﻿using System.Globalization;
+using System.Text;
 using System.Text.Json;
+using task.Common;
 using task.Contract;
 using task.Entities;
 using task.Extensions;
@@ -8,13 +10,19 @@ namespace task.Services;
 
 internal sealed class DataSourceService() : IDataSourceService
 {
+    private static readonly JsonSerializerOptions JsonSerializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        TypeInfoResolver = new MappingJsonResolver()
+    };
+
     async Task<IList<Office>> IDataSourceService.LoadAsync(string filePath, CancellationToken cancellationToken)
     {
         var result = new List<Office>();
 
-        using (var stream = File.OpenRead(filePath))
+        using (var fileStream = File.OpenRead(filePath))
         {
-            using (JsonDocument doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken))
+            using (JsonDocument doc = await JsonDocument.ParseAsync(fileStream, cancellationToken: cancellationToken))
             {
                 var cityElements = doc.RootElement.EnumerateObject().FirstOrDefault().Value;
 
@@ -27,39 +35,35 @@ internal sealed class DataSourceService() : IDataSourceService
                         .GetPropertyIgnoreCase("terminals")
                         .GetPropertyIgnoreCase("terminal");
 
-                    foreach (var terminalNode in terminalsElements.EnumerateArray())
+                    foreach (var terminalElement in terminalsElements.EnumerateArray())
                     {
-                        var office = new Office
-                        {
-                            Id = int.TryParse(terminalNode.GetPropertyIgnoreCase("id").GetString(), out var id) ? id : 0,
-                            Code = cityElement.GetPropertyIgnoreCase("code").GetString(),
-                            CityCode = cityElement.GetPropertyIgnoreCase("cityID").GetInt32(),
-                            Uuid = null, // Не нашел подходящего поля в JSON
-                            Type = GetOfficeType(terminalNode),
-                            CountryCode = "", // Не нашел подходящего поля в JSON
-                            Coordinates = new Coordinates
-                            {
-                                Latitude = double.Parse(terminalNode.GetPropertyIgnoreCase("latitude").GetString(), CultureInfo.InvariantCulture),
-                                Longitude = double.Parse(terminalNode.GetPropertyIgnoreCase("longitude").GetString(), CultureInfo.InvariantCulture),
-                            },
-                            AddressRegion = null,
-                            AddressCity = cityElement.GetPropertyIgnoreCase("name").GetString(),
-                            AddressStreet = terminalNode.GetPropertyIgnoreCase("address").GetString(),
-                            AddressHouseNumber = terminalNode.GetPropertyIgnoreCase("fullAddress").GetString(),
-                            AddressApartment = 0, // Не нашел подходящего поля в JSON
-                            WorkTime = "" // Не нашел подходящего поля в JSON
-                        };
+                        var rawText = terminalElement.GetRawText();
 
-                        office.Phones ??= [];
+                        Office? office = null;
 
-                        foreach (var phoneNode in terminalNode.GetPropertyIgnoreCase("phones").EnumerateArray())
+                        using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(rawText)))
                         {
-                            office.Phones.Add(new Phone
+                            office = await JsonSerializer.DeserializeAsync<Office>(stream, JsonSerializerOptions, cancellationToken);
+          
+                            if (office is null)
                             {
-                                OfficeId = office.Id,
-                                PhoneNumber = phoneNode.GetPropertyIgnoreCase("number").GetString(),
-                                Additional = phoneNode.GetPropertyIgnoreCase("comment").GetString(),
-                                Office = office
+                                throw new JsonException("Не удалось десериализовать объект Office");
+                            }
+
+                            office.Code ??= cityElement.GetPropertyOrNull("code")?.GetString();
+                            office.CityCode = cityElement.GetPropertyOrNull("cityID")?.GetInt32() ?? default;
+                            office.AddressCity = cityElement.GetPropertyOrNull("name")?.GetString();
+                            office.Coordinates = new Coordinates
+                            {
+                                Latitude = GetDouble(terminalElement, "latitude"),
+                                Longitude = GetDouble(terminalElement, "longitude")
+                            };
+                            office.Type = GetOfficeType(terminalElement);
+
+                            office.Phones.ForEach(p =>
+                            {
+                                p.OfficeId = office.Id;
+                                p.Office = office;
                             });
                         }
 
@@ -72,13 +76,20 @@ internal sealed class DataSourceService() : IDataSourceService
         }
     }
 
+    private static double GetDouble(JsonElement jsonElement, string propertyName)
+    {
+        return double.TryParse(jsonElement.GetPropertyOrNull(propertyName)?.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : default;
+    }
+
     private static OfficeType? GetOfficeType(JsonElement terminalNode)
     {
-        return terminalNode.GetPropertyIgnoreCase("isPVZ").GetBoolean()
+        return terminalNode.GetPropertyOrNull("isPVZ")?.GetBoolean() ?? false
                             ? OfficeType.PVZ
-                            : terminalNode.GetPropertyIgnoreCase("isOffice").GetBoolean()
+                            : terminalNode.GetPropertyOrNull("isOffice")?.GetBoolean() ?? false
                             ? OfficeType.POSTAMAT
-                            : terminalNode.GetPropertyIgnoreCase("storage").GetBoolean()
+                            : terminalNode.GetPropertyOrNull("storage")?.GetBoolean() ?? false
                             ? OfficeType.WAREHOUSE
                             : null;
     }

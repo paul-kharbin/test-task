@@ -27,4 +27,11 @@ internal static class JsonElementExtensions
         var jsonElement = element.EnumerateObject().First(o => propertyName.Equals(o.Name, StringComparison.InvariantCultureIgnoreCase));
         return jsonElement.Value;
     }
+
+    public static JsonElement? GetPropertyOrNull(this JsonElement jsonElement, string propertyName)
+    {
+        return jsonElement.TryGetPropertyIgnoreCase(propertyName, out var property)
+            ? property
+            : (JsonElement?)null;
+    }
 }

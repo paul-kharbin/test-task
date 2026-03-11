@@ -11,18 +11,12 @@ internal sealed class PhoneConfiguration : IEntityTypeConfiguration<Phone>
         builder.ToTable("phones");
 
         builder.HasKey(p => p.Id);
-        
+
         builder.HasOne(p => p.Office)
                .WithMany(o => o.Phones)
                .HasForeignKey(p => p.OfficeId);
 
-        builder.Property(p => p.OfficeId);
-
-        builder.Property(p => p.PhoneNumber)
-            .HasMaxLength(20)
-            .IsRequired();
-
-        builder.Property(p => p.Additional)
-            .HasMaxLength(250);
+        builder.Property(p => p.PhoneNumber).HasMaxLength(20).IsRequired();
+        builder.Property(p => p.Additional).HasMaxLength(250);
     }
 }

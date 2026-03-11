@@ -18,19 +18,19 @@ internal sealed class OfficeConfiguration : IEntityTypeConfiguration<Office>
                .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(o => o.CityCode);
+        builder.HasIndex(o => o.Code);
 
         builder.OwnsOne(o => o.Coordinates);
 
-        builder.Property(o => o.Code);
         builder.Property(o => o.CityCode).IsRequired();
-        builder.Property(o => o.Uuid);
-        builder.Property(o => o.Type);
-        builder.Property(o => o.CountryCode);
-        builder.Property(o => o.AddressRegion);
-        builder.Property(o => o.AddressCity);
-        builder.Property(o => o.AddressStreet);
-        builder.Property(o => o.AddressHouseNumber);
-        builder.Property(o => o.AddressApartment);
-        builder.Property(o => o.WorkTime);
+        builder.Property(o => o.Code).HasMaxLength(25).IsRequired();
+        builder.Property(o => o.Uuid).HasMaxLength(36);
+        builder.Property(o => o.CountryCode).HasMaxLength(3);
+        builder.Property(o => o.AddressRegion).HasMaxLength(250);
+        builder.Property(o => o.AddressCity).HasMaxLength(250);
+        builder.Property(o => o.AddressStreet).HasMaxLength(250);
+        builder.Property(o => o.AddressHouseNumber).HasMaxLength(500);
+        builder.Property(o => o.AddressApartment).HasMaxLength(250);
+        builder.Property(o => o.WorkTime).HasMaxLength(250).IsRequired(false);
     }
 }

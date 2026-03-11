@@ -5,9 +5,9 @@ public class Office
     public int Id { get; set; }
     public string? Code { get; set; }
     public int CityCode { get; set; }
-    public string? Uuid { get; set; }
+    public string? Uuid { get; set; } = Guid.NewGuid().ToString();
     public OfficeType? Type { get; set; }
-    public string CountryCode { get; set; }
+    public string CountryCode { get; set; } = "RU";
     public Coordinates Coordinates { get; set; }
     public string? AddressRegion { get; set; }
     public string? AddressCity { get; set; }
